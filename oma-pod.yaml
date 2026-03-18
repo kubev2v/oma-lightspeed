@@ -1,0 +1,88 @@
+# Local development pod specification for OMA Lightspeed
+# Used with: podman play kube oma-pod.yaml
+#
+# This creates a pod with:
+# - lightspeed-stack: The main AI service (port 8080)
+# - oma-service-mcp: The MCP server providing OMA tools (port 8000)
+#
+# Prerequisites:
+# - Run 'make generate' first to create config files
+# - Ensure .env has your GEMINI_API_KEY
+# - Build or pull the oma-service-mcp image
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oma-lightspeed-pod
+spec:
+  containers:
+    # Main lightspeed-stack service
+    - name: lightspeed-stack
+      image: ${LIGHTSPEED_STACK_IMAGE}
+      env:
+        - name: GEMINI_API_KEY
+          value: ${GEMINI_API_KEY}
+        # GOOGLE_API_KEY is used by litellm for Google AI Studio routing
+        - name: GOOGLE_API_KEY
+          value: ${GEMINI_API_KEY}
+        # Note: GOOGLE_APPLICATION_CREDENTIALS is only set when using Vertex AI
+        # When using Gemini API key, leave this unset so the provider uses the API key
+        # SQLite storage directory - uses /data for persistence with named volume
+        - name: SQLITE_STORE_DIR
+          value: /data
+        - name: LLAMA_STACK_SQLITE_STORE_DIR
+          value: /data
+      ports:
+        - containerPort: 8080
+          hostPort: 8081
+      volumeMounts:
+        - mountPath: /app-root/lightspeed-stack.yaml
+          name: config
+          subPath: lightspeed-stack.yaml
+        - mountPath: /app-root/llama_stack_client_config.yaml
+          name: config
+          subPath: llama_stack_client_config.yaml
+        - mountPath: /tmp/systemprompt.txt
+          name: config
+          subPath: systemprompt.txt
+        # LiteLLM routing fix - maps gemini-X to gemini/gemini-X for Gemini API
+        - mountPath: /app-root/.venv/lib/python3.12/site-packages/sitecustomize.py
+          name: config
+          subPath: sitecustomize.py
+        # Persistent SQLite storage for conversation history
+        - mountPath: /data
+          name: sqlite-data
+
+    # OMA MCP Server - provides migration tools
+    - name: oma-service-mcp
+      image: ${OMA_MCP_IMAGE}
+      env:
+        # Use streamable-http transport (required for lightspeed-stack)
+        - name: TRANSPORT
+          value: streamable-http
+        # Migration Planner API URL
+        # Use host.containers.internal to reach services running on the host machine
+        - name: MIGRATION_PLANNER_URL
+          value: ${MIGRATION_PLANNER_URL}
+        # Auth type: 'forwarded' passes auth from lightspeed, 'none' for local dev
+        - name: AUTH_TYPE
+          value: ${AUTH_TYPE}
+        # Logging
+        - name: LOGGING_LEVEL
+          value: INFO
+        - name: LOG_TO_FILE
+          value: "false"
+      ports:
+        - containerPort: 8000
+          hostPort: 8000
+
+  volumes:
+    - name: config
+      hostPath:
+        path: ${CONFIG_PATH}
+        type: Directory
+    - name: sqlite-data
+      # Persistent storage for conversation history
+      # Uses podman named volume (created automatically)
+      persistentVolumeClaim:
+        claimName: oma-lightspeed-data

@@ -1,0 +1,144 @@
+# NetworkPolicy for OMA Lightspeed production deployment
+#
+# This policy restricts network traffic to only allow:
+# 1. Ingress from OMA UI to Lightspeed (port 8080)
+# 2. Egress from Lightspeed to MCP server (port 8000)
+# 3. Egress from Lightspeed to external LLM APIs (Gemini/Vertex)
+#
+# Apply with: oc apply -f deploy/networkpolicy.yaml
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: oma-lightspeed-network-policy
+  labels:
+    app: oma-lightspeed
+spec:
+  podSelector:
+    matchLabels:
+      app: oma-lightspeed
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow traffic from OpenShift router (for external access via Route)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow traffic from OMA UI pods (adjust labels as needed)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: oma-ui
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow traffic from same namespace (for health checks, etc.)
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Allow traffic to OMA MCP server
+    - to:
+        - podSelector:
+            matchLabels:
+              app: oma-service-mcp
+      ports:
+        - protocol: TCP
+          port: 8000
+
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow egress to external APIs (Gemini, Vertex AI, Google Cloud)
+    # Note: For stricter security, replace with specific IP ranges
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Allow traffic to PostgreSQL (if in same namespace)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+# NetworkPolicy for OMA MCP Server (if deployed in same namespace)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: oma-service-mcp-network-policy
+  labels:
+    app: oma-service-mcp
+spec:
+  podSelector:
+    matchLabels:
+      app: oma-service-mcp
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow traffic from OMA Lightspeed
+    - from:
+        - podSelector:
+            matchLabels:
+              app: oma-lightspeed
+      ports:
+        - protocol: TCP
+          port: 8000
+
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow egress to OMA backend APIs (adjust as needed)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443

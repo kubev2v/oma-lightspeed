@@ -1,0 +1,50 @@
+# UI Deployment for OMA Migration Planner (Standalone)
+# Uses ConfigMap for nginx config instead of init container
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: migration-planner-ui
+  labels:
+    app: migration-planner-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: migration-planner-ui
+  template:
+    metadata:
+      labels:
+        app: migration-planner-ui
+        component: frontend
+    spec:
+      imagePullSecrets:
+      - name: quay-pull-secret
+      containers:
+      - name: migration-planner-ui
+        image: quay.io/rh-ee-yjacobi/migration-planner-ui:ai-chat-widget
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            memory: 128Mi
+            cpu: 100m
+          requests:
+            memory: 64Mi
+            cpu: 50m
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3

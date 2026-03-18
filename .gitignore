@@ -1,0 +1,33 @@
+# Environment and secrets
+.env
+config/vertex-credentials.json
+
+# Generated config files (from template.yaml via generate.sh)
+config/lightspeed-stack.yaml
+config/llama_stack_client_config.yaml
+config/systemprompt.txt
+
+# SQLite databases
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tar
+*.gz
