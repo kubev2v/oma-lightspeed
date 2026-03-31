@@ -6,7 +6,7 @@
 
 # Pin to specific digest for reproducible builds
 # This is lightspeed-stack:0.3.1
-FROM quay.io/lightspeed-core/lightspeed-stack@sha256:1a42c698e0eb3a0e886c55041a829ae6ad7488cf9c92bfef2d36883810e9a881
+FROM quay.io/lightspeed-core/lightspeed-stack@sha256:080741f0784cbb1a01fec1a61c43eaee60ae2a9c7d618000abcec69cf018df16
 
 # Copy migration script (runs before lightspeed-stack starts)
 COPY migrate.py /app/migrate.py
