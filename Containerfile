@@ -4,7 +4,7 @@
 # This image uses the standard Lightspeed Core Stack and injects OMA-specific
 # configuration at runtime via ConfigMaps/volumes.
 
-FROM registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9:0.4.1
+FROM registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9:9.6-1776359478
 
 # Copy migration script (runs before lightspeed-stack starts)
 COPY migrate.py /app/migrate.py
