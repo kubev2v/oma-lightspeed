@@ -9,6 +9,7 @@
 # - Run 'make generate' first to create config files
 # - Ensure .env has your GEMINI_API_KEY
 # - Build or pull the oma-service-mcp image
+# - The oma-lightspeed-secret must exist (scripts/run.sh creates it automatically)
 
 apiVersion: v1
 kind: Pod
@@ -21,10 +22,16 @@ spec:
       image: ${LIGHTSPEED_STACK_IMAGE}
       env:
         - name: GEMINI_API_KEY
-          value: ${GEMINI_API_KEY}
+          valueFrom:
+            secretKeyRef:
+              name: oma-lightspeed-secret
+              key: gemini-api-key
         # GOOGLE_API_KEY is used by litellm for Google AI Studio routing
         - name: GOOGLE_API_KEY
-          value: ${GEMINI_API_KEY}
+          valueFrom:
+            secretKeyRef:
+              name: oma-lightspeed-secret
+              key: gemini-api-key
         # Note: GOOGLE_APPLICATION_CREDENTIALS is only set when using Vertex AI
         # When using Gemini API key, leave this unset so the provider uses the API key
         # SQLite storage directory - uses /data for persistence with named volume

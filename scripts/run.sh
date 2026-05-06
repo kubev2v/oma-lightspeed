@@ -48,15 +48,41 @@ export CONFIG_PATH="$PROJECT_ROOT/config"
 # Change to project root for relative paths in pod yaml
 cd "$PROJECT_ROOT"
 
+# Create Kubernetes secret for API keys (podman play kube supports secrets)
+echo "Creating secret for API keys..."
+podman play kube <(envsubst < "$PROJECT_ROOT/oma-secret.yaml") 2>/dev/null || true
+
 # Start the pod
 echo "Starting OMA Lightspeed pod..."
 podman play kube <(envsubst < "$PROJECT_ROOT/oma-pod.yaml")
 
+# Wait for services to become healthy
+echo "Waiting for services to start..."
+HEALTH_URL="http://localhost:8081/liveness"
+HEALTH_TIMEOUT=60
+HEALTH_INTERVAL=2
+HEALTH_ELAPSED=0
+
+while [ "$HEALTH_ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
+    if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
+        echo "Services are healthy!"
+        break
+    fi
+    echo "  waiting... (${HEALTH_ELAPSED}s/${HEALTH_TIMEOUT}s)"
+    sleep "$HEALTH_INTERVAL"
+    HEALTH_ELAPSED=$((HEALTH_ELAPSED + HEALTH_INTERVAL))
+done
+
+if [ "$HEALTH_ELAPSED" -ge "$HEALTH_TIMEOUT" ]; then
+    echo "WARNING: Services did not become healthy within ${HEALTH_TIMEOUT}s"
+    echo "Check logs with: make logs"
+fi
+
 echo ""
-echo "OMA Lightspeed is starting!"
+echo "OMA Lightspeed is running!"
 echo ""
-echo "Service URL: http://localhost:8080"
-echo "Health check: http://localhost:8080/liveness"
+echo "Service URL: http://localhost:8081"
+echo "Health check: $HEALTH_URL"
 echo ""
 echo "Run 'make logs' to follow logs"
 echo "Run 'make query' to test the API"
