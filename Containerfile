@@ -7,7 +7,7 @@
 FROM registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9:9.6-1776359478
 
 # Install Alembic for database migrations
-RUN python3.12 -m pip install --no-cache-dir alembic
+RUN python3.12 -m pip install --no-cache-dir --extra-index-url https://pypi.org/simple/ alembic
 
 # Copy migration framework and script
 COPY alembic.ini /app/alembic.ini
