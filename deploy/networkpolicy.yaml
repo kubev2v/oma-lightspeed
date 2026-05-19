@@ -32,11 +32,14 @@ spec:
         - protocol: TCP
           port: 8080
 
-    # Allow traffic from OMA UI pods (adjust labels as needed)
+    # Allow traffic from migration-planner-ui pods (cross-namespace)
     - from:
-        - podSelector:
+        - namespaceSelector:
             matchLabels:
-              app: oma-ui
+              kubernetes.io/metadata.name: assisted-migration-dev
+          podSelector:
+            matchLabels:
+              app: migration-planner-ui
       ports:
         - protocol: TCP
           port: 8080
@@ -83,11 +86,14 @@ spec:
         - protocol: TCP
           port: 443
 
-    # Allow traffic to PostgreSQL (if in same namespace)
+    # Allow traffic to PostgreSQL (external AWS RDS)
     - to:
-        - podSelector:
-            matchLabels:
-              app: postgresql
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
       ports:
         - protocol: TCP
           port: 5432
@@ -130,6 +136,18 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+
+    # Allow egress to migration-planner API (cross-namespace)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: assisted-migration-dev
+          podSelector:
+            matchLabels:
+              app: migration-planner
+      ports:
+        - protocol: TCP
+          port: 7443
 
     # Allow egress to OMA backend APIs (adjust as needed)
     - to:
