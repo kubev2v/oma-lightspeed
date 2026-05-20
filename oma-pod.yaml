@@ -32,8 +32,14 @@ spec:
             secretKeyRef:
               name: oma-lightspeed-secret
               key: gemini-api-key
-        # Note: GOOGLE_APPLICATION_CREDENTIALS is only set when using Vertex AI
-        # When using Gemini API key, leave this unset so the provider uses the API key
+        # Vertex AI service account credentials (only used when vertex-credentials.json
+        # is a real SA key; sitecustomize.py auto-detects and routes accordingly)
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /app-root/google-vertex-service-account.json
+        - name: VERTEXAI_PROJECT
+          value: ${VERTEXAI_PROJECT}
+        - name: VERTEXAI_LOCATION
+          value: ${VERTEXAI_LOCATION}
         # SQLite storage directory - uses /data for persistence with named volume
         - name: SQLITE_STORE_DIR
           value: /data
@@ -56,6 +62,10 @@ spec:
         - mountPath: /app-root/.venv/lib/python3.12/site-packages/sitecustomize.py
           name: config
           subPath: sitecustomize.py
+        # Vertex AI service account credentials
+        - mountPath: /app-root/google-vertex-service-account.json
+          name: config
+          subPath: vertex-credentials.json
         # Persistent SQLite storage for conversation history
         - mountPath: /data
           name: sqlite-data
