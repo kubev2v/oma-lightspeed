@@ -206,7 +206,7 @@ objects:
           db: ${env.OMA_POSTGRES_NAME}
           user: ${env.OMA_POSTGRES_USER}
           password: ${env.OMA_POSTGRES_PASSWORD}
-          ssl_mode: disable
+          ssl_mode: ${LIGHTSPEED_STACK_POSTGRES_SSL_MODE}
           ca_cert_path: /etc/tls/ca-bundle.pem
           namespace: lightspeed-stack
         limiters:
@@ -488,6 +488,8 @@ objects:
               secretKeyRef:
                 name: ${OMA_DB_SECRET_NAME}
                 key: db.password
+          - name: LIGHTSPEED_STACK_POSTGRES_SSL_MODE
+            value: ${LIGHTSPEED_STACK_POSTGRES_SSL_MODE}
           resources:
             limits:
               memory: ${MEMORY_LIMIT}

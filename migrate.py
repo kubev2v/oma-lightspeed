@@ -32,6 +32,14 @@ if not postgres_host:
 
 import psycopg2
 
+# SSL configuration for PostgreSQL connection
+ssl_params = {
+    "sslmode": os.getenv("LIGHTSPEED_STACK_POSTGRES_SSL_MODE", "verify-full"),
+}
+ca_cert_path = "/etc/tls/ca-bundle.pem"
+if os.path.exists(ca_cert_path):
+    ssl_params["sslrootcert"] = ca_cert_path
+
 # Configurable connection retry settings
 connect_timeout = int(os.getenv("OMA_POSTGRES_CONNECT_TIMEOUT", "60"))
 retry_interval = float(os.getenv("OMA_POSTGRES_CONNECT_RETRY_INTERVAL", "2"))
@@ -51,7 +59,7 @@ while elapsed < connect_timeout:
             dbname=os.getenv("OMA_POSTGRES_NAME"),
             user=os.getenv("OMA_POSTGRES_USER"),
             password=os.getenv("OMA_POSTGRES_PASSWORD"),
-            sslmode=os.getenv("LIGHTSPEED_STACK_POSTGRES_SSL_MODE", "disable"),
+            **ssl_params,
             connect_timeout=per_attempt_timeout,
         )
         break
