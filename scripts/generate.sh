@@ -1,10 +1,11 @@
 #!/bin/bash
-# Generate configuration files from template.yaml for local development
+# Generate configuration files for local development
 #
 # This script:
-# 1. Creates .env file with Gemini API key (interactive setup)
-# 2. Processes template.yaml with dev parameters
-# 3. Extracts config files into config/ directory
+# 1. Creates .env file with API credentials (interactive setup)
+# 2. Extracts the system prompt from template.yaml
+# 3. Writes lightspeed-stack.yaml and llama_stack_client_config.yaml
+#    with SQLite config for local dev (template.yaml uses PostgreSQL)
 
 set -euo pipefail
 
@@ -48,8 +49,16 @@ if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
         cp "$VERTEX_PATH" "$PROJECT_ROOT/config/vertex-credentials.json"
         chmod 600 "$PROJECT_ROOT/config/vertex-credentials.json"
 
+        read -rp "Enter your GCP project ID: " VERTEXAI_PROJECT
+        read -rp "Enter your GCP region [us-central1]: " VERTEXAI_LOCATION
+        VERTEXAI_LOCATION="${VERTEXAI_LOCATION:-us-central1}"
+
         # Set dummy API key (Vertex AI doesn't use it, but config expects it)
-        echo "GEMINI_API_KEY=dummy" > "$PROJECT_ROOT/.env"
+        cat > "$PROJECT_ROOT/.env" <<ENVEOF
+GEMINI_API_KEY=dummy
+VERTEXAI_PROJECT=$VERTEXAI_PROJECT
+VERTEXAI_LOCATION=$VERTEXAI_LOCATION
+ENVEOF
         chmod 600 "$PROJECT_ROOT/.env"
         echo "Vertex AI credentials configured."
 
@@ -67,40 +76,25 @@ source "$PROJECT_ROOT/.env"
 # Ensure config directory exists
 mkdir -p "$PROJECT_ROOT/config"
 
-# Check for oc command
-if ! command -v oc &> /dev/null; then
-    echo "Error: 'oc' command not found."
-    echo "Install it from: https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
-    echo "Or use 'brew install openshift-cli' on macOS"
+# Check for yq command (used to extract system prompt from template)
+if ! command -v yq &> /dev/null; then
+    echo "Error: 'yq' command not found."
+    echo "Install it: brew install yq (macOS) or https://github.com/mikefarah/yq"
     exit 1
 fi
 
-# Generate lightspeed-stack.yaml from template
-echo "Generating config/lightspeed-stack.yaml..."
-oc process --local \
-    -f "$PROJECT_ROOT/template.yaml" \
-    --param-file="$PROJECT_ROOT/template-params.dev.env" \
-    | yq '.items[] | select(.kind == "ConfigMap" and .metadata.name == "lightspeed-stack-config").data."lightspeed-stack.yaml"' -r \
-    > "$PROJECT_ROOT/config/lightspeed-stack.yaml"
-
-# Generate llama_stack_client_config.yaml from template
-echo "Generating config/llama_stack_client_config.yaml..."
-oc process --local \
-    -f "$PROJECT_ROOT/template.yaml" \
-    --param-file="$PROJECT_ROOT/template-params.dev.env" \
-    | yq '.items[] | select(.kind == "ConfigMap" and .metadata.name == "llama-stack-client-config").data."llama_stack_client_config.yaml"' -r \
-    > "$PROJECT_ROOT/config/llama_stack_client_config.yaml"
-
-# Generate system prompt from template
+# Generate system prompt from template (the only config extracted from template.yaml;
+# lightspeed-stack.yaml and llama_stack_client_config.yaml are written directly below
+# with SQLite settings since the template uses PostgreSQL for production)
 echo "Generating config/systemprompt.txt..."
 yq -r '.objects[] | select(.metadata.name == "lightspeed-stack-config") | .data.system_prompt' \
     "$PROJECT_ROOT/template.yaml" \
     > "$PROJECT_ROOT/config/systemprompt.txt"
 
-# Post-process: Replace postgres config with sqlite for local dev
-echo "Adjusting config for SQLite (local dev)..."
-
-# Update lightspeed-stack.yaml to use SQLite instead of PostgreSQL
+# Write lightspeed-stack.yaml and llama_stack_client_config.yaml with SQLite config.
+# The pod (oma-pod.yaml) mounts a persistent volume at /data and sets
+# SQLITE_STORE_DIR=/data, so all db_path values use /data to stay consistent.
+echo "Generating config/lightspeed-stack.yaml..."
 cat > "$PROJECT_ROOT/config/lightspeed-stack.yaml" << 'EOF'
 name: oma-lightspeed
 service:
@@ -123,26 +117,26 @@ customization:
   system_prompt_path: "/tmp/systemprompt.txt"
   disable_query_system_prompt: false
 inference:
-  default_model: gemini-2.5-flash
+  default_model: models/gemini-2.5-flash
   default_provider: gemini
 database:
   sqlite:
-    db_path: /tmp/sqlite/lightspeed-stack.db
+    db_path: /data/lightspeed-stack.db
 conversation_cache:
   type: sqlite
   sqlite:
-    db_path: /tmp/sqlite/conversation_cache.db
+    db_path: /data/conversation_cache.db
 EOF
 
-# Update llama_stack_client_config.yaml for SQLite
+echo "Generating config/llama_stack_client_config.yaml..."
 cat > "$PROJECT_ROOT/config/llama_stack_client_config.yaml" << 'EOF'
 version: 2
 image_name: starter
 apis:
 - agents
+- files
 - inference
 - safety
-- telemetry
 - tool_runtime
 - vector_io
 providers:
@@ -158,45 +152,55 @@ providers:
       kvstore:
         type: sqlite
         namespace: null
-        db_path: ${env.SQLITE_STORE_DIR:=/tmp/sqlite}/faiss_store.db
+        db_path: ${env.SQLITE_STORE_DIR:=/data}/faiss_store.db
+      persistence:
+        namespace: faiss
+        backend: kv_default
+  files:
+  - provider_id: meta-reference
+    provider_type: inline::localfs
+    config:
+      storage_dir: ${env.SQLITE_STORE_DIR:=/data}/files
+      metadata_store:
+        table_name: files_metadata
+        backend: sql_default
   safety: []
   agents:
   - provider_id: meta-reference
     provider_type: inline::meta-reference
     config:
-      persistence_store:
-        type: sqlite
-        db_path: ${env.SQLITE_STORE_DIR:=/tmp/sqlite}/agents_store.db
-      responses_store:
-        type: sqlite
-        db_path: ${env.SQLITE_STORE_DIR:=/tmp/sqlite}/responses_store.db
-  telemetry:
-  - provider_id: meta-reference
-    provider_type: inline::meta-reference
-    config:
-      service_name: "oma-lightspeed"
-      sinks: console,sqlite
-      sqlite_db_path: ${env.SQLITE_STORE_DIR:=/tmp/sqlite}/trace_store.db
+      persistence:
+        agent_state:
+          namespace: agents
+          backend: kv_default
+        responses:
+          table_name: responses
+          backend: sql_default
   tool_runtime:
   - provider_id: model-context-protocol
     provider_type: remote::model-context-protocol
     config: {}
 metadata_store:
   type: sqlite
-  db_path: ${env.SQLITE_STORE_DIR:=/tmp/sqlite}/registry.db
+  db_path: ${env.SQLITE_STORE_DIR:=/data}/registry.db
 inference_store:
   type: sqlite
-  db_path: ${env.SQLITE_STORE_DIR:=/tmp/sqlite}/inference_store.db
-models: []
-shields: []
-datasets: []
-scoring_fns: []
-benchmarks: []
-tool_groups:
-- toolgroup_id: mcp::oma
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: "http://localhost:8000/mcp"
+  db_path: ${env.SQLITE_STORE_DIR:=/data}/inference_store.db
+registered_resources:
+  models:
+  - metadata: {}
+    model_id: gemini-2.5-flash
+    provider_id: gemini
+    provider_model_id: models/gemini-2.5-flash
+  shields: []
+  datasets: []
+  scoring_fns: []
+  benchmarks: []
+  tool_groups:
+  - toolgroup_id: mcp::oma
+    provider_id: model-context-protocol
+    mcp_endpoint:
+      uri: "http://localhost:8000/mcp"
 server:
   port: 8321
 EOF

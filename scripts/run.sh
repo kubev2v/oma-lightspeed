@@ -49,6 +49,9 @@ export OMA_MCP_IMAGE="${OMA_MCP_IMAGE:-localhost/oma-service-mcp:latest}"
 export MIGRATION_PLANNER_URL="${MIGRATION_PLANNER_URL:-http://host.containers.internal:3443}"
 export AUTH_TYPE="${AUTH_TYPE:-none}"
 export CONFIG_PATH="$PROJECT_ROOT/config"
+# Vertex AI settings (only effective when vertex-credentials.json is a real SA key)
+export VERTEXAI_PROJECT="${VERTEXAI_PROJECT:-}"
+export VERTEXAI_LOCATION="${VERTEXAI_LOCATION:-us-central1}"
 
 # Change to project root for relative paths in pod yaml
 cd "$PROJECT_ROOT"
