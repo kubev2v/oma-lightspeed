@@ -122,10 +122,10 @@ parameters:
   value: "oma-lightspeed-db"
   description: "Name of the Kubernetes secret containing database credentials"
 - name: LIGHTSPEED_STACK_POSTGRES_SSL_MODE
-  value: "verify-full"
+  value: "require"
   description: "SSL mode for PostgreSQL connection"
 - name: LLAMA_STACK_POSTGRES_SSL_MODE
-  value: "verify-full"
+  value: "require"
   description: "SSL mode for Llama Stack PostgreSQL connection"
 
 # Vertex AI / Gemini configuration

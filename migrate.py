@@ -34,7 +34,7 @@ import psycopg2
 
 # SSL configuration for PostgreSQL connection
 ssl_params = {
-    "sslmode": os.getenv("LIGHTSPEED_STACK_POSTGRES_SSL_MODE", "verify-full"),
+    "sslmode": os.getenv("LIGHTSPEED_STACK_POSTGRES_SSL_MODE", "require"),
 }
 ca_cert_path = "/etc/tls/ca-bundle.pem"
 if os.path.exists(ca_cert_path):
