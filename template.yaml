@@ -335,12 +335,12 @@ objects:
   data:
     llama_stack_client_config.yaml: |
       version: 2
-      image_name: starter
+      image_name: oma-lightspeed
       apis:
       - agents
+      - files
       - inference
       - safety
-      - telemetry
       - tool_runtime
       - vector_io
       providers:
@@ -349,6 +349,14 @@ objects:
           provider_type: remote::gemini
           config:
             api_key: ${env.GEMINI_API_KEY:=dummy}
+        files:
+        - provider_id: meta-reference-files
+          provider_type: inline::localfs
+          config:
+            metadata_store:
+              table_name: files_metadata
+              backend: sql_default
+            storage_dir: ${STORAGE_MOUNT_PATH}/files
         vector_io:
         - provider_id: faiss
           provider_type: inline::faiss
@@ -361,13 +369,14 @@ objects:
         - provider_id: meta-reference
           provider_type: inline::meta-reference
           config:
-            persistence_store:
-              namespace: agents::persistence
-              backend: postgres_backend
-            responses_store:
-              namespace: agents::responses
-              backend: postgres_backend
-            telemetry:
+            persistence:
+              agent_state:
+                namespace: agents_state
+                backend: kv_default
+              responses:
+                table_name: agents_responses
+                backend: sql_default
+        telemetry:
         - provider_id: meta-reference
           provider_type: inline::meta-reference
           config:
@@ -382,12 +391,12 @@ objects:
         backends:
           kv_default:
             type: kv_sqlite
-            db_path: ${STORAGE_MOUNT_PATH}/sqlite/registry.db
+            db_path: ${STORAGE_MOUNT_PATH}/sqlite/kv_store.db
           faiss_backend:
             type: kv_sqlite
             db_path: ${STORAGE_MOUNT_PATH}/sqlite/faiss_store.db
-          postgres_backend:
-            type: kv_postgres
+          sql_default:
+            type: sql_postgres
             host: ${env.OMA_POSTGRES_HOST}
             port: ${env.OMA_POSTGRES_PORT}
             db: ${env.OMA_POSTGRES_NAME}
@@ -402,9 +411,13 @@ objects:
             user: ${env.OMA_POSTGRES_USER}
             password: ${env.OMA_POSTGRES_PASSWORD}
             ssl_mode: ${LLAMA_STACK_POSTGRES_SSL_MODE}
-      models: []
-      shields: []
-      datasets: []
+        stores:
+          metadata:
+            namespace: registry
+            backend: kv_default
+          inference:
+            table_name: inference_store
+            backend: sql_default
       scoring_fns: []
       benchmarks: []
       tool_groups:
