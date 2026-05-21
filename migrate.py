@@ -36,9 +36,6 @@ import psycopg2
 ssl_params = {
     "sslmode": os.getenv("LIGHTSPEED_STACK_POSTGRES_SSL_MODE", "require"),
 }
-ca_cert_path = "/etc/tls/ca-bundle.pem"
-if os.path.exists(ca_cert_path):
-    ssl_params["sslrootcert"] = ca_cert_path
 
 # Configurable connection retry settings
 connect_timeout = int(os.getenv("OMA_POSTGRES_CONNECT_TIMEOUT", "60"))
