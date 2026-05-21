@@ -353,7 +353,7 @@ objects:
         - provider_id: faiss
           provider_type: inline::faiss
           config:
-            kvstore:
+            persistence:
               type: sqlite
               namespace: null
               db_path: ${STORAGE_MOUNT_PATH}/sqlite/faiss_store.db
