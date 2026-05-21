@@ -77,6 +77,11 @@ while elapsed < connect_timeout:
 if conn is None:
     sys.exit(f"PostgreSQL not available after {connect_timeout} seconds")
 
+# Ensure the lightspeed-stack schema exists (required by lightspeed-stack for table isolation)
+conn.autocommit = True
+with conn.cursor() as cur:
+    cur.execute('CREATE SCHEMA IF NOT EXISTS "lightspeed-stack"')
+    print("Schema 'lightspeed-stack' ensured")
 conn.close()
 
 # Run Alembic migrations
