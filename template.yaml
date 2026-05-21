@@ -376,13 +376,6 @@ objects:
               responses:
                 table_name: agents_responses
                 backend: sql_default
-        telemetry:
-        - provider_id: meta-reference
-          provider_type: inline::meta-reference
-          config:
-            service_name: "${LLAMA_STACK_OTEL_SERVICE_NAME}"
-            sinks: ${LLAMA_STACK_TELEMETRY_SINKS}
-            sqlite_db_path: ${STORAGE_MOUNT_PATH}/sqlite/trace_store.db
         tool_runtime:
         - provider_id: model-context-protocol
           provider_type: remote::model-context-protocol
