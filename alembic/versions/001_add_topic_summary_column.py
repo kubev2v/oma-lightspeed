@@ -7,6 +7,7 @@ Create Date: 2025-02-23
 """
 
 from alembic import op
+from sqlalchemy import text
 
 revision = "001"
 down_revision = None
@@ -17,15 +18,17 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
     result = conn.execute(
-        op.inline_literal(
+        text(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
             "WHERE table_schema = 'lightspeed-stack' AND table_name = 'user_conversation')"
         )
     )
     if result.scalar():
         op.execute(
-            'ALTER TABLE "lightspeed-stack"."user_conversation" '
-            "ADD COLUMN IF NOT EXISTS topic_summary text"
+            text(
+                'ALTER TABLE "lightspeed-stack"."user_conversation" '
+                "ADD COLUMN IF NOT EXISTS topic_summary text"
+            )
         )
 
 
