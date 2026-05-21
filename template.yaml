@@ -354,9 +354,8 @@ objects:
           provider_type: inline::faiss
           config:
             persistence:
-              type: sqlite
-              namespace: null
-              db_path: ${STORAGE_MOUNT_PATH}/sqlite/faiss_store.db
+              namespace: vector_io::faiss
+              backend: faiss_backend
         safety: []
         agents:
         - provider_id: meta-reference
@@ -389,6 +388,11 @@ objects:
         - provider_id: model-context-protocol
           provider_type: remote::model-context-protocol
           config: {}
+      storage:
+        backends:
+          faiss_backend:
+            type: kv_sqlite
+            db_path: ${STORAGE_MOUNT_PATH}/sqlite/faiss_store.db
       metadata_store:
         type: sqlite
         db_path: ${STORAGE_MOUNT_PATH}/sqlite/registry.db
