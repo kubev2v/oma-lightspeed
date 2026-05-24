@@ -100,7 +100,7 @@ parameters:
 
 # Model configuration
 - name: OMA_DEFAULT_MODEL
-  value: "gemini-2.5-flash"
+  value: "google/gemini-2.5-flash"
   description: "Default LLM model to use"
 
 # Vertex AI configuration
