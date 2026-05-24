@@ -66,6 +66,9 @@ parameters:
 - name: LIGHTSPEED_SERVICE_AUTH_ENABLED
   value: "true"
   description: "Whether to enable authentication"
+- name: LIGHTSPEED_AUTH_MODULE
+  value: "noop"
+  description: "Authentication module (noop, jwk-token, k8s, apikey-token)"
 - name: LIGHTSPEED_SERVICE_COLOR_LOG
   value: "true"
   description: "Whether to use colored log output"
@@ -166,7 +169,7 @@ objects:
         use_as_library_client: true
         library_client_config_path: "${LLAMA_CLIENT_CONFIG_PATH}"
       authentication:
-        module: jwk-token
+        module: ${LIGHTSPEED_AUTH_MODULE}
         skip_for_health_probes: true
         jwk_config:
           url: ${SSO_BASE_URL}/protocol/openid-connect/certs
