@@ -1,7 +1,9 @@
 # Makefile for OMA Lightspeed
 # AI assistant for OMA Migration Planner
 
-.PHONY: all generate run stop rm resume logs query build help
+.PHONY: all generate run stop rm resume logs query build test-eval help
+
+EVAL_TAGS ?= smoke
 
 all: help
 
@@ -32,6 +34,14 @@ logs: ## Show logs for the OMA Lightspeed services
 query: ## Query the OMA Lightspeed service
 	@echo "Querying OMA Lightspeed..."
 	./scripts/query.sh
+
+test-eval: ## Run agent evaluation tests (requires: make run, GEMINI_API_KEY)
+	@pip install -q git+https://github.com/lightspeed-core/lightspeed-evaluation.git#subdirectory=lsc_agent_eval pyyaml 2>/dev/null
+	@if [ "$(EVAL_TAGS)" = "all" ]; then \
+		cd test/evals && python eval.py; \
+	else \
+		cd test/evals && python eval.py --tags $(EVAL_TAGS); \
+	fi
 
 build: ## Build the OMA Lightspeed container image
 	@echo "Building OMA Lightspeed image..."

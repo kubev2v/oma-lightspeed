@@ -31,3 +31,6 @@ Thumbs.db
 # Build artifacts
 *.tar
 *.gz
+
+# Eval test output
+test/evals/eval_output/
