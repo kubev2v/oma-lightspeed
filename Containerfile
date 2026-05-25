@@ -4,7 +4,7 @@
 # This image uses the standard Lightspeed Core Stack and injects OMA-specific
 # configuration at runtime via ConfigMaps/volumes.
 
-FROM registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9:9.6-1776359478
+FROM registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9:0.5.1
 
 # Install Alembic for database migrations
 RUN python3.12 -m pip install --no-cache-dir --extra-index-url https://pypi.org/simple/ alembic

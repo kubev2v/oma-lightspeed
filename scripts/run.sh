@@ -44,7 +44,7 @@ if [[ -z "${GEMINI_API_KEY:-}" ]]; then
 fi
 
 # Set default values for all pod variables (envsubst doesn't handle ${VAR:-default} syntax)
-export LIGHTSPEED_STACK_IMAGE="${LIGHTSPEED_STACK_IMAGE_OVERRIDE:-registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9:0.4.1}"
+export LIGHTSPEED_STACK_IMAGE="${LIGHTSPEED_STACK_IMAGE_OVERRIDE:-quay.io/lightspeed-core/lightspeed-stack:0.5.1}"
 export OMA_MCP_IMAGE="${OMA_MCP_IMAGE:-localhost/oma-service-mcp:latest}"
 export MIGRATION_PLANNER_URL="${MIGRATION_PLANNER_URL:-http://host.containers.internal:3443}"
 export AUTH_TYPE="${AUTH_TYPE:-none}"
