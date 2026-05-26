@@ -16,7 +16,9 @@ Test cases are defined in `eval_data.yaml`, organized into conversation groups w
 
 - Python 3.11+
 - OMA Lightspeed running locally (`make run` from the repo root)
-- Gemini API key for the LLM judge: `export GEMINI_API_KEY=...`
+- **LLM judge credentials** (one of):
+  - Vertex AI service account: `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json`
+  - Gemini API key: `export GEMINI_API_KEY=...` (use `--judge_provider gemini`)
 
 Install the eval framework:
 ```bash
@@ -63,4 +65,6 @@ Add entries to `eval_data.yaml` following the existing patterns. Each entry need
 
 ## CI
 
-Smoke tests run in GitHub Actions on PRs (requires `GEMINI_API_KEY` repository secret).
+Smoke tests run in GitHub Actions on PRs using Vertex AI as the LLM judge.
+
+**Required repository secret:** `VERTEX_SA_JSON` — the full JSON content of a Google Cloud service account with Vertex AI access. Add it at Settings → Secrets and variables → Actions → New repository secret.

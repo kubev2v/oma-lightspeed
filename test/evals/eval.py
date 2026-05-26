@@ -54,8 +54,8 @@ def parse_args():
 
     parser.add_argument(
         "--judge_provider",
-        default="gemini",
-        help="Judge provider for LLM evaluation (default: gemini)",
+        default="vertex",
+        help="Judge provider for LLM evaluation (default: vertex)",
     )
 
     parser.add_argument(

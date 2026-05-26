@@ -22,9 +22,16 @@ jobs:
       - name: Install eval framework
         run: pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git#subdirectory=lsc_agent_eval pyyaml
 
+      - name: Write Vertex AI credentials
+        env:
+          VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
+        run: |
+          echo "$VERTEX_SA_JSON" > /tmp/vertex-sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/vertex-sa.json" >> "$GITHUB_ENV"
+
       - name: Start OMA Lightspeed
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: dummy
         run: |
           make generate <<< "$GEMINI_API_KEY"
           make run &
@@ -35,9 +42,11 @@ jobs:
           done
 
       - name: Run smoke evals
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: cd test/evals && python eval.py --tags smoke
+        run: >
+          cd test/evals && python eval.py
+          --tags smoke
+          --judge_provider vertex
+          --judge_model gemini-2.5-flash
 
       - name: Upload eval results
         if: always()
