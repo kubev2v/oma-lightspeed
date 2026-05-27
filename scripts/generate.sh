@@ -14,6 +14,12 @@ PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
 
 # Interactive .env setup
 if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
+    if [[ ! -t 0 ]]; then
+        echo "Error: .env file not found and stdin is not interactive."
+        echo "Create .env manually before running in CI/non-interactive mode:"
+        echo "  echo 'GEMINI_API_KEY=your-key' > .env"
+        exit 1
+    fi
     echo "Missing .env file. Let's set it up."
     echo ""
     echo "How do you want to authenticate with Google AI?"
