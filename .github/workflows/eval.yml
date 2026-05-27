@@ -106,6 +106,7 @@ jobs:
         run: |
           VERTEX_PROJECT=$(grep VERTEXAI_PROJECT .env | cut -d= -f2)
           sed -i 's|http://localhost:8000/mcp|http://host.containers.internal:8000/mcp|g' config/lightspeed-stack.yaml config/llama_stack_client_config.yaml
+          mkdir -p /tmp/oma-data
           podman run -d --name oma-lightspeed \
             -p 8080:8080 \
             -v $(pwd)/config/lightspeed-stack.yaml:/app-root/lightspeed-stack.yaml:ro \
@@ -113,13 +114,14 @@ jobs:
             -v $(pwd)/config/systemprompt.txt:/tmp/systemprompt.txt:ro \
             -v $(pwd)/config/sitecustomize.py:/app-root/.venv/lib/python3.12/site-packages/sitecustomize.py:ro \
             -v $(pwd)/config/vertex-credentials.json:/app-root/google-vertex-service-account.json:ro \
+            -v /tmp/oma-data:/data \
             -e GEMINI_API_KEY=dummy \
             -e GOOGLE_API_KEY=dummy \
             -e GOOGLE_APPLICATION_CREDENTIALS=/app-root/google-vertex-service-account.json \
             -e VERTEX_AI_PROJECT=$VERTEX_PROJECT \
             -e VERTEX_AI_LOCATION=us-central1 \
-            -e SQLITE_STORE_DIR=/tmp/sqlite \
-            -e LLAMA_STACK_SQLITE_STORE_DIR=/tmp/sqlite \
+            -e SQLITE_STORE_DIR=/data \
+            -e LLAMA_STACK_SQLITE_STORE_DIR=/data \
             $LIGHTSPEED_STACK_IMAGE
           echo "Waiting for OMA Lightspeed..."
           for i in $(seq 1 90); do
