@@ -7,7 +7,6 @@
 #   tool_eval               - validates correct MCP tools called with correct arguments
 #
 # Tags: smoke, domain, role-protection, non-disclosure, tool-usage
-# CI verification: this comment triggers eval workflow
 
 # =============================================================================
 # SMOKE: Core functionality — greeting, identity, basic tool calls
