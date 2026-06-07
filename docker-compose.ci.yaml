@@ -1,0 +1,53 @@
+# CI compose for eval tests.
+# Starts lightspeed-stack + MCP stub, runs evals from the host.
+#
+# Usage:
+#   make generate   # creates config/ files
+#   docker compose -f docker-compose.ci.yaml up -d
+#   make test-eval
+#   docker compose -f docker-compose.ci.yaml down
+
+services:
+  lightspeed-stack:
+    image: ${LIGHTSPEED_STACK_IMAGE:-quay.io/lightspeed-core/lightspeed-stack:0.5.1}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mcp-stub:
+        condition: service_healthy
+    volumes:
+      - ./config/lightspeed-stack.yaml:/app-root/lightspeed-stack.yaml:ro
+      - ./config/llama_stack_client_config.yaml:/app-root/llama_stack_client_config.yaml:ro
+      - ./config/systemprompt.txt:/tmp/systemprompt.txt:ro
+      - ./config/sitecustomize.py:/app-root/.venv/lib/python3.12/site-packages/sitecustomize.py:ro
+      - ${VERTEX_CREDENTIALS_PATH:-./config/vertex-credentials.json}:/app-root/google-vertex-service-account.json:ro
+      - oma-data:/data
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-dummy}
+      - GOOGLE_API_KEY=${GEMINI_API_KEY:-dummy}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app-root/google-vertex-service-account.json
+      - VERTEX_AI_PROJECT=${VERTEX_AI_PROJECT:-}
+      - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
+      - SQLITE_STORE_DIR=/data
+      - LLAMA_STACK_SQLITE_STORE_DIR=/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/liveness"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  mcp-stub:
+    image: python:3.12-slim
+    command: python /app/server.py
+    volumes:
+      - ./test/ci/mcp_stub.py:/app/server.py:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+
+volumes:
+  oma-data:

@@ -36,7 +36,7 @@ query: ## Query the OMA Lightspeed service
 	./scripts/query.sh
 
 test-eval: ## Run agent evaluation tests (requires: make run, GEMINI_API_KEY)
-	@pip install -q git+https://github.com/lightspeed-core/lightspeed-evaluation.git#subdirectory=lsc_agent_eval pyyaml 2>/dev/null
+	@pip install -q git+https://github.com/lightspeed-core/lightspeed-evaluation.git pyyaml 2>/dev/null
 	@if [ "$(EVAL_TAGS)" = "all" ]; then \
 		cd test/evals && python eval.py; \
 	else \
