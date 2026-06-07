@@ -1,11 +1,11 @@
 # OMA Lightspeed Agent Evaluation
 
-End-to-end evaluation for OMA Lightspeed using [lsc_agent_eval](https://github.com/lightspeed-core/lightspeed-evaluation/tree/main/lsc_agent_eval) — the same framework used by assisted-chat and other Lightspeed Core consumers.
+End-to-end evaluation for OMA Lightspeed using [lightspeed-evaluation](https://github.com/lightspeed-core/lightspeed-evaluation) — the same framework used by assisted-chat and other Lightspeed Core consumers.
 
 ## How It Works
 
 `eval.py` sends queries to a running OMA Lightspeed instance and validates responses using:
-- **response_eval:intent** — LLM judge (Gemini) checks if the response conveys the correct intent
+- **response_eval:intent** — LLM judge checks if the response conveys the correct intent
 - **response_eval:sub-string** — verifies expected keywords appear in the response
 - **response_eval:accuracy** — semantic similarity to an expected response
 - **tool_eval** — validates the LLM called the correct MCP tools with correct arguments
@@ -15,42 +15,42 @@ Test cases are defined in `eval_data.yaml`, organized into conversation groups w
 ## Prerequisites
 
 - Python 3.11+
-- OMA Lightspeed running locally (`make run` from the repo root)
+- OMA Lightspeed running locally (`make run`) or via Docker Compose
 - **LLM judge credentials** (one of):
   - Vertex AI service account: `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json`
   - Gemini API key: `export GEMINI_API_KEY=...` (use `--judge_provider gemini`)
 
 Install the eval framework:
 ```bash
-pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git#subdirectory=lsc_agent_eval
+pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git
 ```
 
 ## Running Tests
 
-From the repo root:
+Against a locally running service (`make run`):
 ```bash
 make test-eval                     # smoke tests (default)
 make test-eval EVAL_TAGS=all       # all tests
 make test-eval EVAL_TAGS=domain    # domain knowledge tests only
 ```
 
-Or directly:
+Or using Docker Compose (same setup as CI):
 ```bash
-cd test/evals
-python eval.py --tags smoke
-python eval.py --tags domain role-protection
-python eval.py  # all tests
+make generate
+docker compose -f docker-compose.ci.yaml up -d
+make test-eval
+docker compose -f docker-compose.ci.yaml down -v
 ```
 
 ## Test Tags
 
 | Tag | What it tests |
 |-----|--------------|
-| `smoke` | Core tool calls, greeting, basic guardrails |
+| `smoke` | Greeting, capabilities, off-topic refusal, non-disclosure |
 | `domain` | Migration domain knowledge (assessment methods, complexity, sizing, blockers) |
 | `role-protection` | Off-topic refusal, role-play refusal, tone manipulation |
 | `non-disclosure` | System prompt protection, model detail refusal, prompt injection |
-| `tool-usage` | Multi-turn tool routing, estimation, complexity, context retention |
+| `tool-usage` | MCP tool routing, estimation, complexity, context retention |
 
 ## Adding New Tests
 
@@ -65,6 +65,11 @@ Add entries to `eval_data.yaml` following the existing patterns. Each entry need
 
 ## CI
 
-Smoke tests run in GitHub Actions on PRs using Vertex AI as the LLM judge.
+Smoke evals run in GitHub Actions on every PR via Docker Compose:
+1. Starts lightspeed-stack + MCP stub containers
+2. Sends queries to the live service
+3. Uses Vertex AI as the LLM judge to evaluate response quality
+4. Blocks merge on eval failure
 
-**Required repository secret:** `VERTEX_SA_JSON` — the full JSON content of a Google Cloud service account with Vertex AI access. Add it at Settings → Secrets and variables → Actions → New repository secret.
+**Required secret:** `VERTEX_SA_JSON` — Google Cloud service account JSON with Vertex AI access.
+Set via: `gh secret set VERTEX_SA_JSON --repo kubev2v/oma-lightspeed < sa.json`

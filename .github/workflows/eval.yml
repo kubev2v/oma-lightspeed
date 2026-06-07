@@ -1,8 +1,6 @@
 name: Eval Tests
 
 on:
-  # pull_request_target runs in the base repo context (has access to secrets)
-  # while still being triggered by PR events from forks
   pull_request_target:
     branches: [main]
   workflow_dispatch:
@@ -11,18 +9,13 @@ on:
         description: "Eval tags to run (space-separated, or 'all')"
         default: "smoke"
 
-env:
-  LIGHTSPEED_STACK_IMAGE: quay.io/lightspeed-core/lightspeed-stack:0.5.1
-
 jobs:
   eval-smoke:
     name: eval-smoke
     runs-on: ubuntu-latest
     steps:
-      # Checkout base branch (trusted code for workflow, configs, eval framework)
       - uses: actions/checkout@v4
 
-      # Checkout PR's eval test data (safe — YAML data, not executable)
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request_target'
         with:
@@ -46,7 +39,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git#subdirectory=lsc_agent_eval pyyaml fastapi uvicorn
+          pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git pyyaml
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/local/bin/yq
 
       - name: Write Vertex AI credentials
@@ -58,22 +51,21 @@ jobs:
           import os, json
           raw = os.environ['VERTEX_SA_JSON'].strip()
           if not raw:
-              print('ERROR: VERTEX_SA_JSON secret is not set')
-              exit(1)
+              print('ERROR: VERTEX_SA_JSON secret is not set'); exit(1)
           data = json.loads(raw)
           with open('config/vertex-credentials.json', 'w') as f:
               json.dump(data, f)
-          print(f'Vertex AI SA written (project: {data.get(\"project_id\", \"unknown\")})')
+          print(f'Vertex AI project: {data.get(\"project_id\", \"unknown\")}')
           "
           chmod 644 config/vertex-credentials.json
 
-      - name: Generate config
+      - name: Generate and patch config
         run: |
           VERTEX_PROJECT=$(python3 -c "import json; print(json.load(open('config/vertex-credentials.json')).get('project_id',''))")
-          echo "Vertex AI project: ${VERTEX_PROJECT}"
           printf 'GEMINI_API_KEY=dummy\nVERTEXAI_PROJECT=%s\nVERTEXAI_LOCATION=us-central1\n' "$VERTEX_PROJECT" > .env
           chmod 600 .env
           make generate
+
           yq -i '
             (.providers.inference[0].provider_type) = "remote::vertexai" |
             (.providers.inference[0].config) = {"project": "${env.VERTEX_AI_PROJECT}", "location": "${env.VERTEX_AI_LOCATION}"} |
@@ -81,57 +73,29 @@ jobs:
             (.registered_resources.models[0].provider_model_id) = "google/gemini-2.5-flash"
           ' config/llama_stack_client_config.yaml
           sed -i 's|default_model:.*|default_model: google/gemini-2.5-flash|' config/lightspeed-stack.yaml
+          sed -i 's|http://localhost:8000/mcp|http://mcp-stub:8000/mcp|g' config/lightspeed-stack.yaml config/llama_stack_client_config.yaml
 
-      - name: Start MCP stub
+      - name: Start services
         run: |
-          cat > /tmp/mcp_stub.py << 'PYEOF'
-          from fastapi import FastAPI, Request
-          from starlette.responses import JSONResponse
-          import uvicorn
-          app = FastAPI()
-          @app.api_route("/mcp", methods=["GET", "POST"])
-          async def mcp(request: Request):
-              return JSONResponse({"jsonrpc": "2.0", "result": {"tools": []}})
-          @app.get("/health")
-          async def health():
-              return {"status": "ok"}
-          if __name__ == "__main__":
-              uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
-          PYEOF
-          nohup python3 /tmp/mcp_stub.py > /tmp/mcp_stub.log 2>&1 &
-          sleep 2
-          curl -sf http://localhost:8000/health || { echo "MCP stub failed"; cat /tmp/mcp_stub.log; exit 1; }
+          VERTEX_PROJECT=$(python3 -c "import json; print(json.load(open('config/vertex-credentials.json')).get('project_id',''))")
+          export VERTEX_AI_PROJECT=$VERTEX_PROJECT
+          docker compose -f docker-compose.ci.yaml up -d
 
-      - name: Start OMA Lightspeed
-        run: |
-          VERTEX_PROJECT=$(grep VERTEXAI_PROJECT .env | cut -d= -f2)
-          sed -i 's|http://localhost:8000/mcp|http://host.containers.internal:8000/mcp|g' config/lightspeed-stack.yaml config/llama_stack_client_config.yaml
-          podman run -d --name oma-lightspeed \
-            -p 8080:8080 \
-            -v $(pwd)/config/lightspeed-stack.yaml:/app-root/lightspeed-stack.yaml:ro \
-            -v $(pwd)/config/llama_stack_client_config.yaml:/app-root/llama_stack_client_config.yaml:ro \
-            -v $(pwd)/config/systemprompt.txt:/tmp/systemprompt.txt:ro \
-            -v $(pwd)/config/sitecustomize.py:/app-root/.venv/lib/python3.12/site-packages/sitecustomize.py:ro \
-            -v $(pwd)/config/vertex-credentials.json:/app-root/google-vertex-service-account.json:ro \
-            -e GEMINI_API_KEY=dummy \
-            -e GOOGLE_API_KEY=dummy \
-            -e GOOGLE_APPLICATION_CREDENTIALS=/app-root/google-vertex-service-account.json \
-            -e VERTEX_AI_PROJECT=$VERTEX_PROJECT \
-            -e VERTEX_AI_LOCATION=us-central1 \
-            -e SQLITE_STORE_DIR=/tmp/sqlite \
-            -e LLAMA_STACK_SQLITE_STORE_DIR=/tmp/sqlite \
-            $LIGHTSPEED_STACK_IMAGE
           echo "Waiting for OMA Lightspeed..."
-          for i in $(seq 1 90); do
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:8080/liveness > /dev/null 2>&1; then
-              echo "Service ready after $((i*2))s"
+              echo "Service ready after $((i*3))s"
               break
             fi
-            sleep 2
+            sleep 3
           done
-          curl -sf http://localhost:8080/liveness || { echo "Service failed to start"; podman logs oma-lightspeed 2>&1 | tail -50; exit 1; }
+          curl -sf http://localhost:8080/liveness || {
+            echo "Service failed to start:"
+            docker compose -f docker-compose.ci.yaml logs lightspeed-stack 2>&1 | tail -60
+            exit 1
+          }
 
-      - name: Run smoke evals
+      - name: Run evals
         env:
           GOOGLE_APPLICATION_CREDENTIALS: config/vertex-credentials.json
         run: >
@@ -150,4 +114,8 @@ jobs:
 
       - name: Show logs on failure
         if: failure()
-        run: podman logs oma-lightspeed 2>&1 | tail -100
+        run: docker compose -f docker-compose.ci.yaml logs 2>&1 | tail -100
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.ci.yaml down -v

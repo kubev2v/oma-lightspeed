@@ -48,8 +48,8 @@ def parse_args():
 
     parser.add_argument(
         "--agent_model",
-        default="models/gemini-2.5-flash",
-        help="Agent model (default: models/gemini-2.5-flash)",
+        default="google/gemini-2.5-flash",
+        help="Agent model (default: google/gemini-2.5-flash)",
     )
 
     parser.add_argument(
