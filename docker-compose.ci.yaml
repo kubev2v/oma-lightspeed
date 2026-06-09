@@ -21,7 +21,8 @@ services:
       - ./config/systemprompt.txt:/tmp/systemprompt.txt:ro
       - ./config/sitecustomize.py:/app-root/.venv/lib/python3.12/site-packages/sitecustomize.py:ro
       - ${VERTEX_CREDENTIALS_PATH:-./config/vertex-credentials.json}:/app-root/google-vertex-service-account.json:ro
-      - oma-data:/data
+    tmpfs:
+      - /data
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-dummy}
       - GOOGLE_API_KEY=${GEMINI_API_KEY:-dummy}
@@ -49,5 +50,3 @@ services:
       retries: 3
       start_period: 3s
 
-volumes:
-  oma-data:
