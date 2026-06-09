@@ -3,9 +3,17 @@
 
 set -euo pipefail
 
-if podman pod exists oma-lightspeed-pod &>/dev/null; then
-    echo "Following logs for oma-lightspeed-pod (Ctrl+C to exit)..."
-    podman logs -f oma-lightspeed-pod-lightspeed-stack
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
+
+cd "$PROJECT_ROOT"
+
+SERVICE="${1:-}"
+
+if [[ -n "$SERVICE" ]]; then
+    echo "Following logs for $SERVICE (Ctrl+C to exit)..."
+    podman-compose logs -f "$SERVICE"
 else
-    echo "Pod oma-lightspeed-pod not found. Run 'make run' to start it."
+    echo "Following logs for all services (Ctrl+C to exit)..."
+    podman-compose logs -f
 fi

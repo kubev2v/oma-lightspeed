@@ -11,17 +11,18 @@ This service provides an intelligent chatbot that helps users analyze migration 
 │     OMA UI      │────▶│   OMA Lightspeed    │────▶│  OMA MCP Server │
 │                 │     │ (lightspeed-stack)  │     │  (oma-service)  │
 └─────────────────┘     └─────────────────────┘     └─────────────────┘
-                                │
-                                ▼
-                        ┌───────────────┐
-                        │  Gemini API   │
-                        │  (Vertex AI)  │
-                        └───────────────┘
+                                │                           │
+                                ▼                           ▼
+                        ┌───────────────┐          ┌────────────────┐
+                        │  Gemini API   │          │  Migration     │
+                        │  (Vertex AI)  │          │  Planner API   │
+                        └───────────────┘          └────────────────┘
 ```
 
 **Components:**
 - **OMA Lightspeed**: This repository - the AI orchestration layer
 - **OMA MCP Server**: Separate service providing migration tools via Model Context Protocol
+- **Migration Planner API**: Backend service providing migration data
 - **Gemini/Vertex AI**: Google's LLM for natural language understanding
 
 ## Quick Start (Local Development)
@@ -29,10 +30,9 @@ This service provides an intelligent chatbot that helps users analyze migration 
 ### Prerequisites
 
 - [Podman](https://podman.io/getting-started/installation) (v4.0+)
-- [oc CLI](https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/) (for config generation)
+- [podman-compose](https://github.com/containers/podman-compose) (`pip install podman-compose`)
 - [yq](https://github.com/mikefarah/yq) (for YAML processing)
 - [jq](https://stedolan.github.io/jq/) (for JSON processing)
-- [envsubst](https://www.gnu.org/software/gettext/manual/html_node/envsubst-Invocation.html) (usually pre-installed)
 - Gemini API key (get one at [Google AI Studio](https://aistudio.google.com/app/apikey))
 
 ### Setup
@@ -42,54 +42,42 @@ This service provides an intelligent chatbot that helps users analyze migration 
 git clone https://github.com/kubev2v/oma-lightspeed.git
 cd oma-lightspeed
 
-# 2. Generate configuration (interactive - will ask for API key)
+# 2. Build the MCP server image (first time only)
+git clone https://github.com/kubev2v/oma-service-mcp.git ../oma-service-mcp
+make build-mcp
+
+# 3. Generate configuration (interactive - will ask for API key)
 make generate
 
-# 3. Start the services (lightspeed-stack + MCP server)
+# 4. Start the full stack (PostgreSQL + Planner + MCP + Lightspeed)
 make run
 
-# 4. Test the API
+# 5. Test the API
 make query
 ```
 
-### MCP Server Setup
+`make run` starts the complete OMA AI stack:
 
-The pod includes the **oma-service-mcp** container which provides migration tools. By default, it pulls from `quay.io/kubev2v/oma-service-mcp:latest`.
-
-To build locally from the [oma-service-mcp](https://github.com/kubev2v/oma-service-mcp) repo:
-
-```bash
-# Clone and build the MCP server
-git clone https://github.com/kubev2v/oma-service-mcp.git
-cd oma-service-mcp
-make build
-
-# Set the image in your .env
-echo 'OMA_MCP_IMAGE=localhost/oma-service-mcp:latest' >> ../oma-lightspeed/.env
+```
+PostgreSQL ──▶ Migration Planner API ──▶ OMA Service MCP ──▶ Lightspeed Stack
+  :5432            :3443                    :8000               :8080
 ```
 
-The MCP server needs access to the Migration Planner API. Configure via environment variables in `.env`:
-
-```bash
-# URL of your Migration Planner backend (use host.containers.internal to reach host services)
-MIGRATION_PLANNER_URL=http://host.containers.internal:3443
-
-# Auth type: 'none' for local dev, 'forwarded' for production
-AUTH_TYPE=none
-```
+The Lightspeed API is exposed at **http://localhost:8080**.
 
 ### Available Commands
 
 | Command | Description |
 |---------|-------------|
 | `make generate` | Interactive setup - creates `.env` and config files |
-| `make run` | Start the OMA Lightspeed pod |
-| `make stop` | Stop the pod (preserves state) |
-| `make resume` | Resume a stopped pod |
-| `make rm` | Remove the pod completely |
-| `make logs` | Follow container logs |
+| `make run` | Start the full stack |
+| `make stop` | Stop services (preserves data) |
+| `make resume` | Resume stopped services |
+| `make rm` | Remove services and volumes |
+| `make logs` | Follow all logs (or `make logs SERVICE=lightspeed-stack`) |
 | `make query` | Interactive query interface |
-| `make build` | Build the container image |
+| `make build` | Build the OMA Lightspeed container image |
+| `make build-mcp` | Build the MCP server image from `../oma-service-mcp` |
 | `make help` | Show all available commands |
 
 ## Configuration
@@ -99,11 +87,10 @@ AUTH_TYPE=none
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `GEMINI_API_KEY` | Google Gemini API key | Yes (or Vertex AI) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Vertex AI service account JSON | For Vertex AI |
-| `MIGRATION_PLANNER_URL` | URL of the OMA Migration Planner API | No (default: `http://host.containers.internal:3443`) |
-| `AUTH_TYPE` | MCP auth type: `none` or `forwarded` | No (default: `none`) |
-| `LIGHTSPEED_STACK_IMAGE_OVERRIDE` | Override the lightspeed-stack image | No |
-| `OMA_MCP_IMAGE` | Override the MCP server image | No |
+| `LIGHTSPEED_STACK_IMAGE` | Override the lightspeed-stack image | No |
+| `OMA_MCP_IMAGE` | Override the MCP server image | No (default: `localhost/oma-service-mcp:latest`) |
+| `MIGRATION_PLANNER_IMAGE` | Override the migration planner image | No |
+| `LIGHTSPEED_PORT` | Host port for the API | No (default: `8080`) |
 
 ### Config Files
 
@@ -120,7 +107,8 @@ After running `make generate`, these files are created in `config/`:
 | Database | SQLite | PostgreSQL |
 | Auth | Disabled | Red Hat SSO (JWK) |
 | LLM Credentials | `.env` file | Kubernetes Secret (Vault) |
-| MCP Server | Sidecar or external | Separate Service |
+| MCP Server | Compose service | Separate Service |
+| Migration Planner | Compose service | Separate Deployment |
 
 ## Production Deployment
 
@@ -226,9 +214,9 @@ make run
 oma-lightspeed/
 ├── Containerfile              # Container image definition
 ├── Makefile                   # Developer commands
+├── compose.yaml               # Local dev stack (podman-compose)
 ├── template.yaml              # OpenShift template (source of truth)
 ├── template-params.dev.env    # Development parameter overrides
-├── oma-pod.yaml               # Local development pod spec
 ├── .env.template              # Environment variable template
 ├── config/                    # Generated config files (gitignored)
 ├── scripts/
@@ -258,9 +246,17 @@ oma-lightspeed/
 
 ### MCP tools not available
 
-1. Ensure the OMA MCP server is running
+1. Check the MCP server is healthy: `make logs SERVICE=oma-service-mcp`
 2. Check the MCP URL in `config/lightspeed-stack.yaml`
-3. For local dev, uncomment the MCP sidecar in `oma-pod.yaml`
+3. Verify Migration Planner is reachable: `make logs SERVICE=migration-planner`
+
+### MCP server image not found
+
+Build the image from the sibling repository:
+
+```bash
+make build-mcp
+```
 
 ### Database errors in production
 
@@ -275,4 +271,5 @@ Apache License 2.0
 ## Related Projects
 
 - [lightspeed-stack](https://github.com/lightspeed-core/lightspeed-stack) - The core AI orchestration framework
-- [assisted-chat](https://github.com/rh-ecosystem-edge/assisted-chat) - Reference implementation for OpenShift Assisted Installer
+- [oma-service-mcp](https://github.com/kubev2v/oma-service-mcp) - MCP server providing migration tools
+- [migration-planner](https://github.com/kubev2v/migration-planner) - Core SaaS service for migration planning

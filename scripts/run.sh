@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start OMA Lightspeed services using podman play kube
+# Start OMA Lightspeed services using podman-compose
 
 set -euo pipefail
 
@@ -20,60 +20,60 @@ if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
     exit 1
 fi
 
-# Kill existing pod if running
-if podman pod exists oma-lightspeed-pod &>/dev/null; then
-    echo "Found existing oma-lightspeed-pod. Stopping and removing..."
-    podman pod kill oma-lightspeed-pod 2>/dev/null || true
-    podman pod rm oma-lightspeed-pod 2>/dev/null || true
-fi
-
-# Create named volume for persistent SQLite storage (if not exists)
-if ! podman volume exists oma-lightspeed-data &>/dev/null; then
-    echo "Creating persistent volume for conversation data..."
-    podman volume create oma-lightspeed-data
-fi
-
-# Source environment variables
-set -a
-source "$PROJECT_ROOT/.env"
-set +a
-
-if [[ -z "${GEMINI_API_KEY:-}" ]]; then
-    echo "Error: GEMINI_API_KEY is not set in .env" >&2
+# Check for podman-compose
+if ! command -v podman-compose &> /dev/null; then
+    echo "Error: podman-compose is not installed."
+    echo "Install it: pip install podman-compose"
     exit 1
 fi
 
-# Set default values for all pod variables (envsubst doesn't handle ${VAR:-default} syntax)
-export LIGHTSPEED_STACK_IMAGE="${LIGHTSPEED_STACK_IMAGE_OVERRIDE:-quay.io/lightspeed-core/lightspeed-stack:0.5.1}"
-export OMA_MCP_IMAGE="${OMA_MCP_IMAGE:-localhost/oma-service-mcp:latest}"
-export MIGRATION_PLANNER_URL="${MIGRATION_PLANNER_URL:-http://host.containers.internal:3443}"
-export AUTH_TYPE="${AUTH_TYPE:-none}"
-export CONFIG_PATH="$PROJECT_ROOT/config"
-# Vertex AI settings (only effective when vertex-credentials.json is a real SA key)
-export VERTEXAI_PROJECT="${VERTEXAI_PROJECT:-}"
-export VERTEXAI_LOCATION="${VERTEXAI_LOCATION:-us-central1}"
+# Check if oma-service-mcp image exists locally
+OMA_MCP_IMAGE="${OMA_MCP_IMAGE:-localhost/oma-service-mcp:latest}"
+if ! podman image exists "$OMA_MCP_IMAGE" &>/dev/null; then
+    echo "Warning: MCP server image '$OMA_MCP_IMAGE' not found locally."
+    echo ""
+    if [[ -d "$PROJECT_ROOT/../oma-service-mcp" ]]; then
+        echo "Found oma-service-mcp repo at ../oma-service-mcp"
+        read -rp "Build it now? [Y/n]: " build_mcp
+        if [[ "${build_mcp:-Y}" =~ ^[Yy]$ ]]; then
+            echo "Building oma-service-mcp..."
+            podman build -f "$PROJECT_ROOT/../oma-service-mcp/Containerfile" \
+                -t localhost/oma-service-mcp:latest \
+                "$PROJECT_ROOT/../oma-service-mcp"
+        else
+            echo "Skipping. Set OMA_MCP_IMAGE in .env to use a different image."
+            exit 1
+        fi
+    else
+        echo "To build it, clone and build the repo:"
+        echo "  git clone https://github.com/kubev2v/oma-service-mcp.git ../oma-service-mcp"
+        echo "  make build-mcp"
+        echo ""
+        echo "Or set OMA_MCP_IMAGE in .env to use a pre-built image."
+        exit 1
+    fi
+fi
 
-# Change to project root for relative paths in pod yaml
 cd "$PROJECT_ROOT"
 
-# Create Kubernetes secret for API keys (podman play kube supports secrets)
-echo "Creating secret for API keys..."
-podman play kube --replace <(envsubst < "$PROJECT_ROOT/oma-secret.yaml")
+echo "Starting OMA Lightspeed stack..."
+echo "  PostgreSQL -> Migration Planner -> OMA Service MCP -> Lightspeed Stack"
+echo ""
 
-# Start the pod
-echo "Starting OMA Lightspeed pod..."
-podman play kube <(envsubst < "$PROJECT_ROOT/oma-pod.yaml")
+podman-compose up -d
 
-# Wait for services to become healthy
+# Wait for lightspeed-stack to become healthy
+echo ""
 echo "Waiting for services to start..."
-HEALTH_URL="http://localhost:8081/liveness"
-HEALTH_TIMEOUT=60
-HEALTH_INTERVAL=2
+HEALTH_URL="http://localhost:${LIGHTSPEED_PORT:-8080}/liveness"
+HEALTH_TIMEOUT=120
+HEALTH_INTERVAL=3
 HEALTH_ELAPSED=0
 
 while [ "$HEALTH_ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
     if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
-        echo "Services are healthy!"
+        echo ""
+        echo "All services are healthy!"
         break
     fi
     echo "  waiting... (${HEALTH_ELAPSED}s/${HEALTH_TIMEOUT}s)"
@@ -82,6 +82,7 @@ while [ "$HEALTH_ELAPSED" -lt "$HEALTH_TIMEOUT" ]; do
 done
 
 if [ "$HEALTH_ELAPSED" -ge "$HEALTH_TIMEOUT" ]; then
+    echo ""
     echo "WARNING: Services did not become healthy within ${HEALTH_TIMEOUT}s"
     echo "Check logs with: make logs"
 fi
@@ -89,12 +90,10 @@ fi
 echo ""
 echo "OMA Lightspeed is running!"
 echo ""
-echo "Service URL: http://localhost:8081"
-echo "Health check: $HEALTH_URL"
+echo "  Lightspeed API:     http://localhost:${LIGHTSPEED_PORT:-8080}"
+echo "  Health check:       $HEALTH_URL"
 echo ""
-echo "Run 'make logs' to follow logs"
-echo "Run 'make query' to test the API"
+echo "  make logs    - follow logs"
+echo "  make query   - test the API"
+echo "  make stop    - stop services"
 echo ""
-
-# Follow logs
-"$SCRIPT_DIR/logs.sh"
