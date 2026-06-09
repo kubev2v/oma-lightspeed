@@ -1,13 +1,13 @@
 #!/bin/bash
-# Remove OMA Lightspeed services
+# Remove OMA Lightspeed services and volumes
 
 set -euo pipefail
 
-if podman pod exists oma-lightspeed-pod &>/dev/null; then
-    echo "Removing oma-lightspeed-pod..."
-    podman pod kill oma-lightspeed-pod 2>/dev/null || true
-    podman pod rm oma-lightspeed-pod
-    echo "Pod removed."
-else
-    echo "Pod oma-lightspeed-pod not found."
-fi
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
+
+cd "$PROJECT_ROOT"
+
+echo "Removing OMA Lightspeed services..."
+podman-compose down -v
+echo "Services and volumes removed."

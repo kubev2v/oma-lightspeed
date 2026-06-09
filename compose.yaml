@@ -1,0 +1,75 @@
+# OMA Lightspeed - Full Local Development Stack
+#
+# Runs the complete OMA AI stack locally:
+#   PostgreSQL -> Migration Planner -> OMA Service MCP -> Lightspeed Stack
+#
+# Usage:
+#   make generate   # First time: set up .env with Gemini API key
+#   make run        # Start all services
+#   make query      # Test the API
+#   make logs       # Follow logs
+#   make stop       # Stop services (preserves data)
+#   make rm         # Remove services and volumes
+#
+# Lightspeed API is exposed at: http://localhost:8080
+
+services:
+  planner-db:
+    image: quay.io/sclorg/postgresql-15-c9s:latest
+    restart: on-failure
+    environment:
+      POSTGRESQL_DATABASE: planner
+      POSTGRESQL_USER: admin
+      POSTGRESQL_PASSWORD: adminpass
+      POSTGRESQL_MASTER_USER: admin
+      POSTGRESQL_MASTER_PASSWORD: adminpass
+    volumes:
+      - planner-db:/var/lib/pgsql/data
+
+  migration-planner:
+    image: ${MIGRATION_PLANNER_IMAGE:-quay.io/kubev2v/migration-planner-api:latest}
+    restart: on-failure
+    entrypoint: ["/bin/bash", "-c", "touch /app/rhcos-live-iso.x86_64.iso && /app/planner-api run"]
+    environment:
+      DB_HOST: planner-db
+      DB_PORT: "5432"
+      DB_NAME: planner
+      DB_USER: admin
+      DB_PASS: adminpass
+      MIGRATION_PLANNER_MIGRATIONS_FOLDER: /app/migrations
+      MIGRATION_PLANNER_AUTH: ""
+      MIGRATION_PLANNER_AGENT_AUTH_ENABLED: "false"
+
+  oma-service-mcp:
+    image: ${OMA_MCP_IMAGE:-localhost/oma-service-mcp:latest}
+    restart: on-failure
+    environment:
+      TRANSPORT: streamable-http
+      MIGRATION_PLANNER_URL: http://migration-planner:3443
+      AUTH_TYPE: none
+      LOGGING_LEVEL: INFO
+      LOG_TO_FILE: "false"
+
+  lightspeed-stack:
+    image: ${LIGHTSPEED_STACK_IMAGE:-quay.io/lightspeed-core/lightspeed-stack:0.5.1}
+    restart: on-failure
+    volumes:
+      - ./config/lightspeed-stack.yaml:/app-root/lightspeed-stack.yaml:ro
+      - ./config/llama_stack_client_config.yaml:/app-root/llama_stack_client_config.yaml:ro
+      - ./config/systemprompt.txt:/tmp/systemprompt.txt:ro
+      - ./config/sitecustomize.py:/app-root/.venv/lib/python3.12/site-packages/sitecustomize.py:ro
+      - ${VERTEX_CREDENTIALS_PATH:-./config/vertex-credentials.json}:/app-root/google-vertex-service-account.json:ro
+    tmpfs:
+      - /data
+    env_file:
+      - .env
+    environment:
+      GOOGLE_API_KEY: ${GEMINI_API_KEY}
+      GOOGLE_APPLICATION_CREDENTIALS: /app-root/google-vertex-service-account.json
+      SQLITE_STORE_DIR: /data
+      LLAMA_STACK_SQLITE_STORE_DIR: /data
+    ports:
+      - "${LIGHTSPEED_PORT:-8080}:8080"
+
+volumes:
+  planner-db:

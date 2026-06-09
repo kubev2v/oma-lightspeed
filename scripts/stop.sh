@@ -3,10 +3,11 @@
 
 set -euo pipefail
 
-if podman pod exists oma-lightspeed-pod &>/dev/null; then
-    echo "Stopping oma-lightspeed-pod..."
-    podman pod stop oma-lightspeed-pod
-    echo "Pod stopped."
-else
-    echo "Pod oma-lightspeed-pod not found."
-fi
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
+
+cd "$PROJECT_ROOT"
+
+echo "Stopping OMA Lightspeed services..."
+podman-compose stop
+echo "Services stopped. Run 'make run' to start again."

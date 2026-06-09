@@ -76,9 +76,6 @@ else
     echo ".env file already exists. Skipping interactive setup."
 fi
 
-# Source environment
-source "$PROJECT_ROOT/.env"
-
 # Ensure config directory exists
 mkdir -p "$PROJECT_ROOT/config"
 
@@ -97,9 +94,7 @@ yq -r '.objects[] | select(.metadata.name == "lightspeed-stack-config") | .data.
     "$PROJECT_ROOT/template.yaml" \
     > "$PROJECT_ROOT/config/systemprompt.txt"
 
-# Write lightspeed-stack.yaml and llama_stack_client_config.yaml with SQLite config.
-# The pod (oma-pod.yaml) mounts a persistent volume at /data and sets
-# SQLITE_STORE_DIR=/data, so all db_path values use /data to stay consistent.
+# Write lightspeed-stack.yaml — MCP URL uses the compose service name
 echo "Generating config/lightspeed-stack.yaml..."
 cat > "$PROJECT_ROOT/config/lightspeed-stack.yaml" << 'EOF'
 name: oma-lightspeed
@@ -115,7 +110,7 @@ llama_stack:
   library_client_config_path: "llama_stack_client_config.yaml"
 mcp_servers:
   - name: mcp::oma
-    url: "http://localhost:8000/mcp"
+    url: "http://oma-service-mcp:8000/mcp"
 user_data_collection:
   feedback_enabled: false
   transcripts_enabled: false
@@ -206,7 +201,7 @@ registered_resources:
   - toolgroup_id: mcp::oma
     provider_id: model-context-protocol
     mcp_endpoint:
-      uri: "http://localhost:8000/mcp"
+      uri: "http://oma-service-mcp:8000/mcp"
 server:
   port: 8321
 EOF
