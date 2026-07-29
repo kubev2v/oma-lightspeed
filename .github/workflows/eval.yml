@@ -16,22 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/checkout@v7
-        if: github.event_name == 'pull_request_target'
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: pr
-          sparse-checkout: test/evals/eval_data.yaml
-          sparse-checkout-cone-mode: false
-
       - name: Use PR eval data if changed
         if: github.event_name == 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -f pr/test/evals/eval_data.yaml ]; then
-            cp pr/test/evals/eval_data.yaml test/evals/eval_data.yaml
-            echo "Using eval_data.yaml from PR"
-          fi
-          rm -rf pr
+          gh api "repos/${{ github.repository }}/contents/test/evals/eval_data.yaml" \
+            -f ref="${{ github.event.pull_request.head.sha }}" \
+            --jq '.content' | base64 -d > test/evals/eval_data.yaml \
+          && echo "Using eval_data.yaml from PR"
 
       - uses: actions/setup-python@v7
         with:
