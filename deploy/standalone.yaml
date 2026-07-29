@@ -4,6 +4,9 @@
 # Deploy with:
 #   oc apply -f deploy/standalone.yaml
 #
+# Access via port-forward (no Route — this manifest is for local dev only):
+#   oc port-forward svc/oma-lightspeed 8080:8080
+#
 # Prerequisites:
 #   - Create secret with Gemini API key:
 #     oc create secret generic oma-lightspeed-gemini --from-literal=GEMINI_API_KEY=<your-key>
@@ -291,21 +294,3 @@ spec:
   selector:
     app: oma-lightspeed
 
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: oma-lightspeed
-  labels:
-    app: oma-lightspeed
-spec:
-  path: /api/oma_chat
-  to:
-    kind: Service
-    name: oma-lightspeed
-    weight: 100
-  port:
-    targetPort: http
-  tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect
