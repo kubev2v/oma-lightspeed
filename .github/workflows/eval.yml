@@ -3,28 +3,25 @@ name: Eval Tests
 on:
   pull_request_target:
     branches: [main]
+    types: [opened, synchronize]
   workflow_dispatch:
     inputs:
       tags:
         description: "Eval tags to run (space-separated, or 'all')"
         default: "smoke"
 
+permissions:
+  contents: read
+
 jobs:
   eval-smoke:
     name: eval-smoke
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(fromJSON('["MEMBER", "COLLABORATOR", "OWNER"]'), github.event.pull_request.author_association)
     steps:
       - uses: actions/checkout@v7
-
-      - name: Use PR eval data if changed
-        if: github.event_name == 'pull_request_target'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${{ github.repository }}/contents/test/evals/eval_data.yaml" \
-            -f ref="${{ github.event.pull_request.head.sha }}" \
-            --jq '.content' | base64 -d > test/evals/eval_data.yaml \
-          && echo "Using eval_data.yaml from PR"
 
       - uses: actions/setup-python@v7
         with:
@@ -50,7 +47,7 @@ jobs:
               json.dump(data, f)
           print(f'Vertex AI project: {data.get(\"project_id\", \"unknown\")}')
           "
-          chmod 644 config/vertex-credentials.json
+          chmod 600 config/vertex-credentials.json
 
       - name: Generate and patch config
         run: |
